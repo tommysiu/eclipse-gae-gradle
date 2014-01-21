@@ -1,0 +1,147 @@
+apply plugin: 'war'
+apply plugin: 'eclipse-wtp'
+apply plugin: 'gae'
+
+version = '0.1.0-SNAPSHOT'
+webAppDirName = 'war'
+
+ext {
+   springVersion = '3.2.6.RELEASE'
+   appEngineHome = "$System.env.APPENGINE_HOME"
+}
+
+buildscript {
+   repositories {
+      mavenCentral()
+   }
+   dependencies {
+      classpath 'org.gradle.api.plugins:gradle-gae-plugin:0.9'
+   }
+}
+
+repositories {
+   mavenCentral()
+   maven {url 'https://oss.sonatype.org/content/repositories/google-releases/'}
+}
+
+dependencies {
+   providedCompile "javax.servlet:servlet-api:2.5"
+   
+   testCompile "junit:junit:4.+"
+   
+   compile "org.springframework:spring-webmvc:$springVersion"
+
+   // AppEngine dependencies, copy from APPENGINE_HOME lib folders
+   compile files(
+      "$appEngineHome/lib/user/appengine-api-1.0-sdk-1.8.8.jar", 
+      "$appEngineHome/lib/opt/user/appengine-api-labs/v1/appengine-api-labs.jar",
+      "$appEngineHome/lib/opt/user/appengine-endpoints/v1/appengine-endpoints.jar",
+      "$appEngineHome/lib/opt/user/appengine-endpoints/v1/appengine-endpoints-deps.jar",
+      "$appEngineHome/lib/opt/user/datanucleus/v2/asm-4.0.jar",
+      "$appEngineHome/lib/opt/user/datanucleus/v2/datanucleus-core-3.1.3.jar",
+      "$appEngineHome/lib/opt/user/datanucleus/v2/datanucleus-api-jpa-3.1.3.jar",
+      "$appEngineHome/lib/opt/user/datanucleus/v2/datanucleus-api-jdo-3.1.3.jar",
+      "$appEngineHome/lib/opt/user/datanucleus/v2/datanucleus-appengine-2.1.2.jar",
+      "$appEngineHome/lib/opt/user/datanucleus/v2/geronimo-jpa_2.0_spec-1.0.jar",
+      "$appEngineHome/lib/opt/user/datanucleus/v2/jdo-api-3.0.1.jar",
+      "$appEngineHome/lib/opt/user/datanucleus/v2/jta-1.1.jar",
+      "$appEngineHome/lib/opt/user/jsr107/v1/jsr107cache-1.1.jar",
+      "$appEngineHome/lib/opt/user/jsr107/v1/appengine-jsr107cache-1.8.8.jar")
+
+   // runtime dependencies
+   runtime "javax.servlet:jstl:1.1.2"
+}
+
+eclipse {
+   project {
+      buildCommands.clear()
+      buildCommand 'org.eclipse.jdt.core.javabuilder'
+      buildCommand 'org.eclipse.wst.common.project.facet.core.builder'
+      buildCommand 'com.google.gdt.eclipse.core.webAppProjectValidator'
+      buildCommand 'com.google.appengine.eclipse.core.enhancerbuilder'
+      buildCommand 'com.google.appengine.eclipse.core.gaeProjectChangeNotifier'
+      buildCommand 'com.google.appengine.eclipse.core.projectValidator'
+      natures.clear()
+      natures 'org.eclipse.jdt.core.javanature', 'org.eclipse.wst.common.project.facet.core.nature', 
+         'com.google.appengine.eclipse.core.gaeNature'
+   }
+
+   classpath {
+      defaultOutputDir = file("${project.projectDir}/war/WEB-INF/classes")
+
+      // correct classpaths needed by GAE
+      containers.clear()
+      containers.add 'com.google.appengine.eclipse.core.GAE_CONTAINER'
+      containers.add 'org.eclipse.jdt.launching.JRE_CONTAINER'
+      file {
+         whenMerged { classpath ->
+            classpath.entries.removeAll {
+               entry -> entry.kind == 'lib' || 
+               (entry.kind == 'con' && entry.path == 'org.eclipse.jst.j2ee.internal.web.container')
+            } 
+            classpath.entries.findAll {
+               entry -> entry.hasProperty('exported') 
+            }*.exported = false
+         }
+      }
+   }
+
+   wtp {
+      facet {
+         facet name: 'java', version: '1.7'
+      }
+   }
+}
+
+task cleanWarLibDir(type: Delete) {
+   delete fileTree(dir: "war/WEB-INF/lib")
+}
+
+task populateWarLib(type: Copy) {
+   into('war/WEB-INF/lib')
+   from configurations.compile
+
+   // Eclipse AppEngine plugin assumes some file names without version number
+   // Rename them in WEB-INF/lib so the plugin will not complain
+   rename ('appengine-api-labs-1.8.8.jar', 'appengine-api-labs.jar')
+   rename ('appengine-endpoints-1.8.8.jar', 'appengine-endpoints.jar')
+   rename ('appengine-endpoints-deps-1.8.8.jar', 'appengine-endpoints-deps.jar')
+}
+
+// populate the WEB-INF/lib
+tasks.eclipse.dependsOn('checkenv','populateWarLib')
+tasks.populateWarLib.dependsOn('cleanWarLibDir')
+
+task checkenv << {
+   if (System.env.APPENGINE_HOME == null) {
+      throw new GradleException('The environment variable APPENGINE_HOME is not set')
+   }
+}
+
+// fix the GAE eclipse prop file
+tasks.eclipse.doLast {
+   // populate WEB-INF/lib
+   //populateWarLib
+
+   // write settings file 'com.google.appengine.eclipse.core.prefs'
+   ant.propertyfile(file: ".settings/com.google.appengine.eclipse.core.prefs") {
+      ant.entry(key: "eclipse.preferences.version", value: "1")
+      ant.entry(key: "gaeDatanucleusVersion", value: "2")
+      ant.entry(key: "gaeHrdEnabled", value: "true")
+   //props.setProperty('filesCopiedToWebInfLib', 'appengine-api-1.0-sdk-1.8.8.jar|appengine-api-labs.jar|appengine-endpoints-deps.jar|appengine-endpoints.jar|appengine-jsr107cache-1.8.8.jar|asm-4.0.jar|datanucleus-api-jdo-3.1.3.jar|datanucleus-api-jpa-3.1.3.jar|datanucleus-appengine-2.1.2.jar|datanucleus-core-3.1.3.jar|geronimo-jpa_2.0_spec-1.0.jar|jdo-api-3.0.1.jar|jsr107cache-1.1.jar|jta-1.1.jar')
+   }
+
+   // write settings file 'com.google.gdt.eclipse.core.prefs'
+   ant.propertyfile(file: ".settings/com.google.gdt.eclipse.core.prefs") {
+      ant.entry(key: "eclipse.preferences.version", value: "1")
+      ant.entry(key: "warSrcDir", value: "war")
+      ant.entry(key: "warSrcDirIsOutput", value: "true")
+   }
+
+}
+
+war.doLast {
+   cleanWarLibDir
+   populateWarLib
+}
+
