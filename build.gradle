@@ -8,6 +8,7 @@ webAppDirName = 'war'
 ext {
    springVersion = '3.2.6.RELEASE'
    appEngineHome = "$System.env.APPENGINE_HOME"
+   appEngineSdkVersion = '1.8.9'
 }
 
 buildscript {
@@ -33,7 +34,7 @@ dependencies {
 
    // AppEngine dependencies, copy from APPENGINE_HOME lib folders
    compile files(
-      "$appEngineHome/lib/user/appengine-api-1.0-sdk-1.8.8.jar", 
+      "$appEngineHome/lib/user/appengine-api-1.0-sdk-${appEngineSdkVersion}.jar", 
       "$appEngineHome/lib/opt/user/appengine-api-labs/v1/appengine-api-labs.jar",
       "$appEngineHome/lib/opt/user/appengine-endpoints/v1/appengine-endpoints.jar",
       "$appEngineHome/lib/opt/user/appengine-endpoints/v1/appengine-endpoints-deps.jar",
@@ -46,7 +47,7 @@ dependencies {
       "$appEngineHome/lib/opt/user/datanucleus/v2/jdo-api-3.0.1.jar",
       "$appEngineHome/lib/opt/user/datanucleus/v2/jta-1.1.jar",
       "$appEngineHome/lib/opt/user/jsr107/v1/jsr107cache-1.1.jar",
-      "$appEngineHome/lib/opt/user/jsr107/v1/appengine-jsr107cache-1.8.8.jar")
+      "$appEngineHome/lib/opt/user/jsr107/v1/appengine-jsr107cache-${appEngineSdkVersion}.jar")
 
    // runtime dependencies
    runtime "javax.servlet:jstl:1.1.2"
@@ -55,16 +56,17 @@ dependencies {
 eclipse {
    // add build commands and specify the project natures
    project {
+      natures.clear()
+      natures 'org.eclipse.jdt.core.javanature', 
+         'com.google.appengine.eclipse.core.gaeNature',
+         'org.eclipse.wst.common.project.facet.core.nature'
       buildCommands.clear()
-      buildCommand 'org.eclipse.jdt.core.javabuilder'
       buildCommand 'org.eclipse.wst.common.project.facet.core.builder'
+      buildCommand 'org.eclipse.jdt.core.javabuilder'
       buildCommand 'com.google.gdt.eclipse.core.webAppProjectValidator'
-      buildCommand 'com.google.appengine.eclipse.core.enhancerbuilder'
       buildCommand 'com.google.appengine.eclipse.core.gaeProjectChangeNotifier'
       buildCommand 'com.google.appengine.eclipse.core.projectValidator'
-      natures.clear()
-      natures 'org.eclipse.jdt.core.javanature', 'org.eclipse.wst.common.project.facet.core.nature', 
-         'com.google.appengine.eclipse.core.gaeNature'
+      buildCommand 'com.google.appengine.eclipse.core.enhancerbuilder'
    }
 
    classpath {
@@ -110,10 +112,17 @@ task populateWarLib(type: Copy) {
 tasks.eclipse.dependsOn('checkenv','populateWarLib')
 tasks.populateWarLib.dependsOn('cleanWarLibDir')
 
-// task to check the APPENGINE_HOME environment variable
+// task to check the APPENGINE_HOME environment variable and gae sdk version
 task checkenv << {
    if (System.env.APPENGINE_HOME == null) {
       throw new GradleException('The environment variable APPENGINE_HOME is not set')
+   }
+
+   // check sdk jar exist
+   def sdkJarName = "$appEngineHome/lib/user/appengine-api-1.0-sdk-${appEngineSdkVersion}.jar"
+   File sdkJar = new File(sdkJarName)
+   if (!sdkJar.exists()) {
+      throw new GradleException("The sdk jar file $sdkJarName does not exist")
    }
 }
 
