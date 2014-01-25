@@ -132,7 +132,7 @@ tasks.eclipse.doLast {
    // write settings file 'com.google.appengine.eclipse.core.prefs'
    ant.propertyfile(file: ".settings/com.google.appengine.eclipse.core.prefs") {
       ant.entry(key: "eclipse.preferences.version", value: "1")
-      ant.entry(key: "gaeDatanucleusVersion", value: "2")
+      ant.entry(key: "gaeDatanucleusVersion", value: "v2")
       ant.entry(key: "gaeHrdEnabled", value: "true")
    }
 
